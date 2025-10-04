@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Habitat Designer</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Load modules in dependency order -->
+    <script src="js/modules/utils.js"></script>
+    <script src="js/modules/scene.js"></script>
+    <script src="js/modules/habitat.js"></script>
+    <script src="js/modules/systems.js"></script>
+    <script src="js/modules/floors.js"></script>
+    <script src="js/modules/furniture.js"></script>
+    <script src="js/modules/planner.js"></script>
+    <script src="js/modules/ui.js"></script>
+    <script src="js/modules/core.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🚀 Space Habitat Designer</h1>
+            <p>Design and explore space habitat layouts for crew missions</p>
+            <div style="margin-top: 0.75rem;">
+                <button id="theme-toggle" class="btn btn-secondary" aria-label="Toggle theme">🌙 Dark</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>Plan</h3>
+                    <div class="layout-controls">
+                        <button id="rebuild-floors" class="btn btn-secondary">Rebuild Floors</button>
+                        <button id="open-msq" class="btn btn-primary">Plan Setup</button>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <h3>Habitat Shape</h3>
+                    <div class="shape-controls">
+                        <label for="shape-type">Shape Type:</label>
+                        <select id="shape-type">
+                            <option value="cylinder">Cylinder</option>
+                            <option value="sphere">Sphere</option>
+                            <option value="cube">Cube</option>
+                            <option value="torus">Torus</option>
+                        </select>
+                        
+                        <label for="radius">Radius (m):</label>
+                        <input type="range" id="radius" min="5" max="20" value="10" step="0.5">
+                        <span id="radius-value">10</span>
+                        
+                        <label for="height">Height (m):</label>
+                        <input type="range" id="height" min="5" max="30" value="15" step="0.5">
+                        <span id="height-value">15</span>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Systems & Layout</h3>
+                    <div class="systems-controls">
+                        <div class="system-item">
+                            <input type="checkbox" id="life-support" checked>
+                            <label for="life-support">Life Support</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="power" checked>
+                            <label for="power">Power Systems</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="waste" checked>
+                            <label for="waste">Waste Management</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="thermal" checked>
+                            <label for="thermal">Thermal Control</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="communications" checked>
+                            <label for="communications">Communications</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="medical" checked>
+                            <label for="medical">Medical Care</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="sleep" checked>
+                            <label for="sleep">Sleep Quarters</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="exercise" checked>
+                            <label for="exercise">Exercise Area</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="food" checked>
+                            <label for="food">Food Storage & Prep</label>
+                        </div>
+                        <div class="system-item">
+                            <input type="checkbox" id="stowage" checked>
+                            <label for="stowage">Stowage</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Layout Options</h3>
+                    <div class="layout-controls">
+                        <button id="auto-layout" class="btn btn-primary">Auto Layout</button>
+                        <button id="clear-layout" class="btn btn-secondary">Clear Layout</button>
+                        <button id="save-layout" class="btn btn-success">Save Layout</button>
+                        <button id="load-layout" class="btn btn-info">Load Layout</button>
+                        <button id="clear-workspace" class="btn btn-secondary">Clear Workspace</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>View Mode</h3>
+                    <div class="layout-controls">
+                        <button id="view-solid" class="btn btn-secondary">Solid</button>
+                        <button id="view-wire" class="btn btn-secondary">Wire</button>
+                        <button id="view-outline" class="btn btn-secondary">Outline</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Objects</h3>
+                    <div class="shape-controls">
+                        <label for="object-type">Object Type</label>
+                        <select id="object-type">
+                            <option value="bed">Bed</option>
+                            <option value="table">Table</option>
+                            <option value="chair">Chair</option>
+                            <option value="storage">Storage</option>
+                            <option value="cube">Cube (debug)</option>
+                            <option value="sphere">Sphere (debug)</option>
+                            <option value="cylinder">Cylinder (debug)</option>
+                        </select>
+                        
+                        <label>Select Floor</label>
+                        <div id="floor-selection-buttons" class="floor-buttons">
+                            <!-- Floor buttons will be generated dynamically -->
+                        </div>
+                        
+                        <div class="layout-controls">
+                            <button id="toggle-placement" class="btn btn-primary">Placement: Off</button>
+                            <button id="clear-floor-objects" class="btn btn-secondary">Clear Floor</button>
+                            <button id="toggle-vibrant" class="btn btn-info">Vibrant Colors: Off</button>
+                        </div>
+                        <div class="layout-controls" style="margin-top: 0.5rem;">
+                            <button id="toggle-layout-lock" class="btn btn-warning">Lock Layout: Off</button>
+                        </div>
+                        
+                        <div class="object-controls" style="margin-top: 1rem;">
+                            <h4 style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-color);">Object Controls</h4>
+                            <div class="layout-controls">
+                                <button id="delete-selected-object" class="btn btn-danger" disabled>Delete Selected</button>
+                                <button id="duplicate-selected-object" class="btn btn-info" disabled>Duplicate</button>
+                                <button id="clear-selection" class="btn btn-secondary" disabled>Clear Selection</button>
+                            </div>
+                            <div class="layout-controls" style="margin-top: 0.5rem;">
+                                <button id="toggle-adjustment-mode" class="btn btn-secondary">Adjustment: Move</button>
+                                <button id="reset-object-transform" class="btn btn-secondary" disabled>Reset Transform</button>
+                            </div>
+                        </div>
+                        
+                        <p style="margin-top:0.5rem; font-size:0.9rem; color: var(--muted-text);">Select a floor using the buttons above. With placement on, double-click on the floor to place the selected object. Click objects to select and drag them around. Use "Lock Layout" to prevent accidental changes.</p>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Planner</h3>
+                    <div class="layout-controls">
+                        <button id="enter-planner" class="btn btn-info">Enter Planner</button>
+                        <button id="exit-planner" class="btn btn-secondary">Exit Planner</button>
+                    </div>
+                    <div class="layout-controls" style="margin-top:0.5rem;">
+                        <button id="rotate-left" class="btn btn-secondary">Rotate ⟲</button>
+                        <button id="rotate-right" class="btn btn-secondary">Rotate ⟳</button>
+                    </div>
+                    <div class="layout-controls" style="margin-top:0.5rem;">
+                        <button id="delete-selected" class="btn btn-secondary">Delete Selected</button>
+                        <button id="toggle-snap" class="btn btn-secondary">Snap: On</button>
+                    </div>
+                    <p style="margin-top:0.5rem; font-size:0.9rem; color: var(--muted-text);">Planner uses a top-down view on the selected floor for precise furniture layout. Double-click to place objects.</p>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Habitat Info</h3>
+                    <div class="habitat-info">
+                        <p><strong>Volume:</strong> <span id="volume-display">0</span> m³</p>
+                        <p><strong>Surface Area:</strong> <span id="surface-display">0</span> m²</p>
+                        <p><strong>Crew Capacity:</strong> <span id="crew-display">0</span> people</p>
+                        <p><strong>Systems Installed:</strong> <span id="systems-count">0</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3D Visualization -->
+            <div class="visualization-container">
+                <div id="canvas-container">
+                    <canvas id="habitat-canvas"></canvas>
+                </div>
+                <div class="view-controls">
+                    <button id="top-view" class="view-btn">Top</button>
+                    <button id="side-view" class="view-btn">Side</button>
+                    <button id="front-view" class="view-btn">Front</button>
+                    <button id="reset-view" class="view-btn">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Space Habitat Designer - Explore the future of space living</p>
+        </footer>
+    </div>
+
+    
+
+    <!-- Plan Setup (Questionnaire) Modal -->
+    <div id="msq-modal" class="modal" aria-hidden="true">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="msq-modal-title">
+            <h3 id="msq-modal-title">Plan Setup</h3>
+            <div class="modal-body">
+                <div class="msq-field">
+                    <label>Type of habitat</label>
+                    <div class="chip-group" data-group="habitatType" data-multi="true">
+                        <button class="chip" data-value="Apartment">Apartment</button>
+                        <button class="chip" data-value="Villa">Villa</button>
+                        <button class="chip" data-value="Single Flat">Single Flat</button>
+                        <button class="chip" data-value="Mansion">Mansion</button>
+                    </div>
+                </div>
+
+                <div class="msq-field two-col">
+                    <div>
+                        <label>Number of floors</label>
+                        <input type="number" id="msq-floors" min="1" max="50" value="3" />
+                    </div>
+                    <div>
+                        <label>Crew size</label>
+                        <input type="number" id="msq-crew" min="1" max="500" value="6" />
+                    </div>
+                </div>
+
+                <div class="msq-field">
+                    <label>Purpose</label>
+                    <div class="chip-group" data-group="purpose" data-multi="true">
+                        <button class="chip" data-value="Living">Living</button>
+                        <button class="chip" data-value="Research">Research</button>
+                        <button class="chip" data-value="Mixed-use">Mixed-use</button>
+                        <button class="chip" data-value="Emergency shelter">Emergency shelter</button>
+                    </div>
+                </div>
+
+                <div class="msq-field">
+                    <label>Style preference</label>
+                    <div class="chip-group" data-group="style" data-multi="false">
+                        <button class="chip" data-value="Minimalist">Minimalist</button>
+                        <button class="chip" data-value="Organic">Organic</button>
+                        <button class="chip" data-value="Industrial">Industrial</button>
+                        <button class="chip" data-value="Futuristic">Futuristic</button>
+                    </div>
+                </div>
+
+                <div class="msq-field">
+                    <label>Color palette</label>
+                    <div class="chip-group" data-group="palette" data-multi="false">
+                        <button class="chip" data-value="Soft pastels">Soft pastels</button>
+                        <button class="chip" data-value="Neon sci-fi">Neon sci-fi</button>
+                        <button class="chip" data-value="Earth tones">Earth tones</button>
+                    </div>
+                </div>
+
+                <div class="msq-field">
+                    <div class="materials-header">
+                        <label>Preferred materials</label>
+                        <label class="inline">
+                            <input type="checkbox" id="msq-ai-materials" /> Let AI predict
+                        </label>
+                    </div>
+                    <div class="chip-group" id="msq-materials" data-group="materials" data-multi="true">
+                        <button class="chip" data-value="Aluminum">Aluminum</button>
+                        <button class="chip" data-value="Carbon fiber">Carbon fiber</button>
+                        <button class="chip" data-value="Regolith concrete">Regolith concrete</button>
+                        <button class="chip" data-value="Aerogel panels">Aerogel panels</button>
+                        <button class="chip" data-value="Titanium">Titanium</button>
+                        <button class="chip" data-value="Biopolymer composites">Biopolymer composites</button>
+                    </div>
+                    <div id="msq-ai-suggestion" class="ai-suggestion" hidden>
+                        Suggested: <span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="msq-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="msq-apply" class="btn btn-success">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Initialize the application -->
+    <script>
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Theme bootstrap
+            const savedTheme = localStorage.getItem('shd-theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', initialTheme);
+
+            const toggleBtn = document.getElementById('theme-toggle');
+            const setToggleLabel = (theme) => {
+                if (!toggleBtn) return;
+                if (theme === 'dark') {
+                    toggleBtn.textContent = '🌙 Dark';
+                } else {
+                    toggleBtn.textContent = '☀️ Light';
+                }
+            };
+            setToggleLabel(initialTheme);
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    const next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    localStorage.setItem('shd-theme', next);
+                    setToggleLabel(next);
+                    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+                });
+            }
+
+            new SpaceHabitatDesigner();
+        });
+
+        // Add some interactive features
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add hover effects for system items
+            const systemItems = document.querySelectorAll('.system-item');
+            systemItems.forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    item.style.transform = 'scale(1.05)';
+                    item.style.transition = 'transform 0.2s ease';
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    item.style.transform = 'scale(1)';
+                });
+            });
+
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                switch (e.key) {
+                    case 'a':
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            document.getElementById('auto-layout').click();
+                        }
+                        break;
+                    case 'c':
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            document.getElementById('clear-layout').click();
+                        }
+                        break;
+                    case 's':
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            document.getElementById('save-layout').click();
+                        }
+                        break;
+                    case 'l':
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            document.getElementById('load-layout').click();
+                        }
+                        break;
+                }
+            });
+
+            // Add tooltips
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(button => {
+                const shortcuts = {
+                    'auto-layout': 'Ctrl+A',
+                    'clear-layout': 'Ctrl+C',
+                    'save-layout': 'Ctrl+S',
+                    'load-layout': 'Ctrl+L'
+                };
+                
+                const shortcut = shortcuts[button.id];
+                if (shortcut) {
+                    button.title = `${button.textContent} (${shortcut})`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

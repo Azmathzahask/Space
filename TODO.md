@@ -1,0 +1,3 @@
+- [x] Copy all files from 'other/space-habitat-designer - Copy/' to root directory, overwriting existing files
+- [x] Verify the copy was successful
+- Test the application by opening index.html

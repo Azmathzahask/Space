@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Load modules in dependency order -->
+    <script src="js/modules/utils.js"></script>
+    <script src="js/modules/scene.js"></script>
+    <script src="js/modules/habitat.js"></script>
+    <script src="js/modules/systems.js"></script>
+    <script src="js/modules/floors.js"></script>
+    <script src="js/modules/furniture.js"></script>
+    <script src="js/modules/planner.js"></script>
+    <script src="js/modules/ui.js"></script>
+    <script src="js/modules/core.js"></script>
+</head>
+<body>
+    <h1>Module Test</h1>
+    <div id="test-output"></div>
+    
+    <script>
+        try {
+            console.log('Testing module loading...');
+            
+            // Test if classes are defined
+            console.log('UtilsManager:', typeof UtilsManager);
+            console.log('SceneManager:', typeof SceneManager);
+            console.log('HabitatManager:', typeof HabitatManager);
+            console.log('SystemsManager:', typeof SystemsManager);
+            console.log('FloorsManager:', typeof FloorsManager);
+            console.log('FurnitureManager:', typeof FurnitureManager);
+            console.log('PlannerManager:', typeof PlannerManager);
+            console.log('UIManager:', typeof UIManager);
+            console.log('SpaceHabitatDesigner:', typeof SpaceHabitatDesigner);
+            
+            // Test if we can create instances
+            const designer = new SpaceHabitatDesigner();
+            console.log('SpaceHabitatDesigner created successfully:', designer);
+            
+            document.getElementById('test-output').innerHTML = '<p style="color: green;">✅ All modules loaded successfully!</p>';
+            
+        } catch (error) {
+            console.error('Error loading modules:', error);
+            document.getElementById('test-output').innerHTML = '<p style="color: red;">❌ Error: ' + error.message + '</p>';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "space-habitat-designer",
+  "version": "1.0.0",
+  "description": "A visual tool for designing and exploring space habitat layouts for crew missions. This interactive 3D application allows users to define habitat shapes, volumes, and explore possible layout options for critical space systems.",
+  "main": "firebase-integration.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

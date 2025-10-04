@@ -1,0 +1,1626 @@
+// Space Habitat Designer - Main JavaScript File
+
+class SpaceHabitatDesigner {
+    constructor() {
+        this.scene = null;
+        this.camera = null;
+        this.renderer = null;
+        this.controls = null;
+        this.habitatGroup = null;
+        this.systemsGroup = null;
+        this.gridHelper = null;
+        this.ambientLight = null;
+        this.directionalLight = null;
+        this.pointLight = null;
+        this.habitatMaterial = null;
+        this.wireframeMaterial = null;
+        this.floorGroup = null;
+        this.floorObjectsGroup = null;
+        this.selectedFloorIndex = null;
+        this.numFloors = 0;
+        this.planPlace = '';
+        this.planAmenities = [];
+        this.placementEnabled = false;
+        this.placementObjectType = 'bed';
+        this.raycaster = new THREE.Raycaster();
+        this.pointer = new THREE.Vector2();
+        this.isPlanner = false;
+        this.snapEnabled = true;
+        this.selectedObject = null;
+        this.vibrantEnabled = false;
+        this.floorThickness = 0.3;
+        this.activeDrops = [];
+        this.clock = new THREE.Clock();
+        this.furnitureKeyCounter = 0;
+        this.currentShape = 'cylinder';
+        this.currentRadius = 10;
+        this.currentHeight = 15;
+        this.systems = [];
+        this.autoLayoutActive = false;
+        this.viewMode = 'solid';
+        this.outlineGroup = null;
+        this.habitatDisabled = true;
+        
+        this.init();
+        this.setupEventListeners();
+        // Apply theme to Three.js scene once everything exists
+        this.applyThemeToWorkspace(this.getCurrentTheme());
+        this.animate();
+        // Setup questionnaire UI after core init
+        this.setupQuestionnaireUI();
+        // Lazy habitat creation: start empty
+        this.habitatInitialized = false;
+    }
+
+    init() {
+        // Create scene
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0c0c0c);
+
+        // Create camera
+        this.camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        this.camera.position.set(30, 30, 30);
+
+        // Create renderer
+        const canvas = document.getElementById('habitat-canvas');
+        this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.canvasElement = canvas;
+
+        // Create controls
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.05;
+
+        // Create groups
+        this.habitatGroup = new THREE.Group();
+        this.systemsGroup = new THREE.Group();
+        this.floorGroup = new THREE.Group();
+        this.floorObjectsGroup = new THREE.Group();
+        this.floorPartitionsGroup = new THREE.Group();
+        this.scene.add(this.habitatGroup);
+        this.scene.add(this.systemsGroup);
+        this.scene.add(this.floorGroup);
+        this.scene.add(this.floorObjectsGroup);
+        this.scene.add(this.floorPartitionsGroup);
+        this.outlineGroup = new THREE.Group();
+        this.scene.add(this.outlineGroup);
+
+        // Add lighting
+        this.setupLighting();
+
+        // Add grid
+        this.addGrid();
+
+        // Handle window resize
+        window.addEventListener('resize', () => this.onWindowResize());
+        // Pointer events for placement
+        const canvasEl = this.canvasElement || document.getElementById('habitat-canvas');
+        if (canvasEl) {
+            canvasEl.addEventListener('pointermove', (e) => this.onPointerMove(e));
+            canvasEl.addEventListener('click', (e) => this.onCanvasClick(e));
+        }
+    }
+
+    setupLighting() {
+        // Ambient light
+        this.ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        this.scene.add(this.ambientLight);
+
+        // Directional light
+        this.directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        this.directionalLight.position.set(50, 50, 50);
+        this.directionalLight.castShadow = true;
+        this.directionalLight.shadow.mapSize.width = 2048;
+        this.directionalLight.shadow.mapSize.height = 2048;
+        this.scene.add(this.directionalLight);
+
+        // Point light for accent
+        this.pointLight = new THREE.PointLight(0x00d4ff, 0.5, 100);
+        this.pointLight.position.set(-20, 20, -20);
+        this.scene.add(this.pointLight);
+    }
+
+    addGrid() {
+        if (this.gridHelper) this.scene.remove(this.gridHelper);
+        this.gridHelper = new THREE.GridHelper(100, 20, 0x444444, 0x222222);
+        this.gridHelper.position.y = -this.currentHeight / 2;
+        this.scene.add(this.gridHelper);
+    }
+
+    createHabitat() {
+        // Habitat shapes are disabled: ensure group is empty and proceed with floors only
+        this.habitatGroup.clear();
+        this.habitatMaterial = null;
+        this.wireframeMaterial = null;
+        this.refreshOutline();
+        this.buildFloors();
+        this.updateHabitatInfo(true);
+        this.habitatInitialized = true;
+    }
+
+    ensureHabitatExists() {
+        if (!this.habitatInitialized) {
+            this.createHabitat();
+        }
+    }
+
+    createSystem(systemType, position) {
+        const systemColors = {
+            'life-support': 0xff6b6b,
+            'power': 0xffd93d,
+            'waste': 0x6bcf7f,
+            'thermal': 0x4d96ff,
+            'communications': 0x9b59b6,
+            'medical': 0xe74c3c,
+            'sleep': 0x3498db,
+            'exercise': 0xf39c12,
+            'food': 0x1abc9c,
+            'stowage': 0x95a5a6
+        };
+
+        const systemIcons = {
+            'life-support': '🫁',
+            'power': '⚡',
+            'waste': '♻️',
+            'thermal': '🌡️',
+            'communications': '📡',
+            'medical': '🏥',
+            'sleep': '🛏️',
+            'exercise': '💪',
+            'food': '🍽️',
+            'stowage': '📦'
+        };
+
+        // Create system geometry
+        const geometry = new THREE.BoxGeometry(2, 2, 2);
+        const material = new THREE.MeshPhongMaterial({
+            color: systemColors[systemType],
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        // Add system label
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = '#000000';
+        context.font = '24px Arial';
+        context.textAlign = 'center';
+        context.fillText(systemIcons[systemType] + ' ' + systemType.replace('-', ' '), canvas.width / 2, canvas.height / 2 + 8);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const labelMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(labelMaterial);
+        sprite.position.set(position.x, position.y + 2, position.z);
+        sprite.scale.set(4, 1, 1);
+
+        const systemGroup = new THREE.Group();
+        systemGroup.add(mesh);
+        systemGroup.add(sprite);
+        systemGroup.userData = { type: systemType };
+
+        return systemGroup;
+    }
+
+    autoLayout() {
+        this.clearSystems();
+        
+        const enabledSystems = this.getEnabledSystems();
+        if (enabledSystems.length === 0) return;
+
+        const radius = this.currentRadius * 0.8;
+        const height = this.currentHeight * 0.8;
+        const angleStep = (2 * Math.PI) / enabledSystems.length;
+
+        enabledSystems.forEach((systemType, index) => {
+            const angle = index * angleStep;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            const y = (Math.random() - 0.5) * height * 0.5;
+
+            const system = this.createSystem(systemType, new THREE.Vector3(x, y, z));
+            this.systemsGroup.add(system);
+            this.systems.push(system);
+        });
+
+        this.updateSystemsCount();
+    }
+
+    clearSystems() {
+        this.systemsGroup.clear();
+        this.systems = [];
+        this.updateSystemsCount();
+    }
+
+    getEnabledSystems() {
+        const systemIds = [
+            'life-support', 'power', 'waste', 'thermal', 'communications',
+            'medical', 'sleep', 'exercise', 'food', 'stowage'
+        ];
+
+        return systemIds.filter(id => document.getElementById(id).checked);
+    }
+
+    updateHabitatInfo(forceZero = false) {
+        let volume, surfaceArea;
+
+        if (forceZero || this.habitatDisabled) {
+            volume = 0;
+            surfaceArea = 0;
+        } else {
+        switch (this.currentShape) {
+            case 'cylinder':
+                volume = Math.PI * this.currentRadius * this.currentRadius * this.currentHeight;
+                surfaceArea = 2 * Math.PI * this.currentRadius * this.currentHeight + 
+                             2 * Math.PI * this.currentRadius * this.currentRadius;
+                break;
+            case 'sphere':
+                volume = (4/3) * Math.PI * this.currentRadius * this.currentRadius * this.currentRadius;
+                surfaceArea = 4 * Math.PI * this.currentRadius * this.currentRadius;
+                break;
+            case 'cube':
+                volume = this.currentRadius * 2 * this.currentHeight * this.currentRadius * 2;
+                surfaceArea = 2 * (this.currentRadius * 2 * this.currentHeight + 
+                                 this.currentRadius * 2 * this.currentRadius * 2 + 
+                                 this.currentHeight * this.currentRadius * 2);
+                break;
+            case 'torus':
+                const R = this.currentRadius;
+                const r = this.currentRadius * 0.3;
+                volume = 2 * Math.PI * Math.PI * R * r * r;
+                surfaceArea = 4 * Math.PI * Math.PI * R * r;
+                break;
+            }
+        }
+
+        const crewCapacity = volume ? Math.floor(volume / 20) : 0;
+
+        document.getElementById('volume-display').textContent = Math.round(volume);
+        document.getElementById('surface-display').textContent = Math.round(surfaceArea);
+        document.getElementById('crew-display').textContent = crewCapacity;
+    }
+
+    updateSystemsCount() {
+        document.getElementById('systems-count').textContent = this.systems.length;
+    }
+
+    setupEventListeners() {
+        // Shape controls
+        document.getElementById('shape-type').addEventListener('change', (e) => {
+            this.currentShape = e.target.value;
+            // Explicit user action: selecting a shape enables the habitat shell
+            this.habitatDisabled = false;
+            this.ensureHabitatExists();
+            this.createHabitat();
+        });
+
+        document.getElementById('radius').addEventListener('input', (e) => {
+            this.currentRadius = parseFloat(e.target.value);
+            document.getElementById('radius-value').textContent = this.currentRadius;
+            if (!this.habitatDisabled) { this.ensureHabitatExists(); this.createHabitat(); }
+        });
+
+        document.getElementById('height').addEventListener('input', (e) => {
+            this.currentHeight = parseFloat(e.target.value);
+            document.getElementById('height-value').textContent = this.currentHeight;
+            if (!this.habitatDisabled) { this.ensureHabitatExists(); this.createHabitat(); }
+        });
+
+        // Layout controls
+        document.getElementById('auto-layout').addEventListener('click', () => {
+            if (!this.habitatDisabled) this.ensureHabitatExists();
+            this.autoLayout();
+        });
+
+        document.getElementById('clear-layout').addEventListener('click', () => {
+            this.clearSystems();
+        });
+
+        document.getElementById('save-layout').addEventListener('click', () => {
+            this.saveLayout();
+        });
+
+        document.getElementById('load-layout').addEventListener('click', () => {
+            this.loadLayout();
+        });
+
+        // View controls
+        document.getElementById('top-view').addEventListener('click', () => {
+            this.setView('top');
+        });
+
+        document.getElementById('side-view').addEventListener('click', () => {
+            this.setView('side');
+        });
+
+        document.getElementById('front-view').addEventListener('click', () => {
+            this.setView('front');
+        });
+
+        document.getElementById('reset-view').addEventListener('click', () => {
+            this.setView('reset');
+        });
+
+        // System checkboxes
+        const systemCheckboxes = document.querySelectorAll('.system-item input[type="checkbox"]');
+        systemCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                this.updateSystemsCount();
+            });
+        });
+
+        // Listen for theme changes from UI toggle
+        document.addEventListener('themechange', (e) => {
+            const theme = e.detail && e.detail.theme ? e.detail.theme : this.getCurrentTheme();
+            this.applyThemeToWorkspace(theme);
+        });
+
+        // Plan: keep only rebuild floors, open uses MSQ modal now
+        const rebuildFloorsBtn = document.getElementById('rebuild-floors');
+        if (rebuildFloorsBtn) rebuildFloorsBtn.addEventListener('click', () => this.buildFloors());
+
+        // Object palette
+        const objType = document.getElementById('object-type');
+        const togglePlacement = document.getElementById('toggle-placement');
+        const clearFloor = document.getElementById('clear-floor-objects');
+        const toggleVibrant = document.getElementById('toggle-vibrant');
+        if (objType) objType.addEventListener('change', (e) => { this.placementObjectType = e.target.value; });
+        if (togglePlacement) togglePlacement.addEventListener('click', () => this.togglePlacement());
+        if (clearFloor) clearFloor.addEventListener('click', () => this.clearSelectedFloorObjects());
+        if (toggleVibrant) toggleVibrant.addEventListener('click', () => this.toggleVibrantColors(toggleVibrant));
+
+        // View mode buttons
+        const btnSolid = document.getElementById('view-solid');
+        const btnWire = document.getElementById('view-wire');
+        const btnOutline = document.getElementById('view-outline');
+        if (btnSolid) btnSolid.addEventListener('click', () => this.setViewMode('solid'));
+        if (btnWire) btnWire.addEventListener('click', () => this.setViewMode('wire'));
+        if (btnOutline) btnOutline.addEventListener('click', () => this.setViewMode('outline'));
+
+        // Planner controls
+        const enterPlanner = document.getElementById('enter-planner');
+        const exitPlanner = document.getElementById('exit-planner');
+        const rotateLeft = document.getElementById('rotate-left');
+        const rotateRight = document.getElementById('rotate-right');
+        const deleteSelected = document.getElementById('delete-selected');
+        const toggleSnap = document.getElementById('toggle-snap');
+        if (enterPlanner) enterPlanner.addEventListener('click', () => this.enterPlannerMode());
+        if (exitPlanner) exitPlanner.addEventListener('click', () => this.exitPlannerMode());
+        if (rotateLeft) rotateLeft.addEventListener('click', () => this.rotateSelected(-Math.PI / 12));
+        if (rotateRight) rotateRight.addEventListener('click', () => this.rotateSelected(Math.PI / 12));
+        if (deleteSelected) deleteSelected.addEventListener('click', () => this.deleteSelected());
+        if (toggleSnap) toggleSnap.addEventListener('click', () => this.toggleSnap(toggleSnap));
+
+        // Clear workspace button
+        const clearWorkspaceBtn = document.getElementById('clear-workspace');
+        if (clearWorkspaceBtn) clearWorkspaceBtn.addEventListener('click', () => this.clearWorkspace());
+    }
+
+    setupQuestionnaireUI() {
+        const openBtn = document.getElementById('open-msq');
+        const modal = document.getElementById('msq-modal');
+        const applyBtn = document.getElementById('msq-apply');
+        const cancelBtn = document.getElementById('msq-cancel');
+        const aiToggle = document.getElementById('msq-ai-materials');
+        const aiSuggestion = document.getElementById('msq-ai-suggestion');
+        const aiSuggestionText = aiSuggestion ? aiSuggestion.querySelector('span') : null;
+        const floorsInput = document.getElementById('msq-floors');
+        const crewInput = document.getElementById('msq-crew');
+
+        const open = () => { if (modal) { modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false'); }};
+        const close = () => { if (modal) { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); }};
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+        // Chip toggling
+        const groups = document.querySelectorAll('#msq-modal .chip-group');
+        groups.forEach(group => {
+            group.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!(target && target.classList && target.classList.contains('chip'))) return;
+                const isMulti = group.getAttribute('data-multi') === 'true';
+                if (!isMulti) {
+                    group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                    target.classList.add('active');
+                } else {
+                    target.classList.toggle('active');
+                }
+                if (group.id === 'msq-materials' && aiToggle && aiToggle.checked) {
+                    aiToggle.checked = false;
+                    if (aiSuggestion) aiSuggestion.hidden = true;
+                }
+            });
+        });
+
+        // AI prediction
+        const predictMaterials = () => {
+            const getValues = (sel) => Array.from(document.querySelectorAll(`#msq-modal [data-group="${sel}"] .chip.active`)).map(c => c.getAttribute('data-value'));
+            const types = getValues('habitatType');
+            const purposes = getValues('purpose');
+            const style = getValues('style')[0] || '';
+            const palette = getValues('palette')[0] || '';
+            const crew = crewInput ? parseInt(crewInput.value, 10) || 0 : 0;
+            const floors = floorsInput ? parseInt(floorsInput.value, 10) || 1 : 1;
+
+            const picks = new Set();
+            if (purposes.includes('Research')) picks.add('Carbon fiber'), picks.add('Titanium');
+            if (purposes.includes('Emergency shelter')) picks.add('Regolith concrete'), picks.add('Aerogel panels');
+            if (types.includes('Mansion') || crew > 20) picks.add('Aluminum');
+            if (style === 'Organic') picks.add('Biopolymer composites');
+            if (palette === 'Neon sci-fi') picks.add('Carbon fiber');
+            if (floors >= 5) picks.add('Titanium');
+            if (picks.size === 0) picks.add('Aluminum');
+
+            const arr = Array.from(picks);
+            if (aiSuggestion && aiSuggestionText) {
+                aiSuggestionText.textContent = arr.join(', ');
+                aiSuggestion.hidden = false;
+            }
+            return arr;
+        };
+
+        if (aiToggle) {
+            aiToggle.addEventListener('change', () => {
+                if (aiToggle.checked) {
+                    // Clear existing design when AI is predicting
+                    this.clearDesignForAIPrediction();
+                    predictMaterials();
+                    // Clear manual selections
+                    const matGroup = document.getElementById('msq-materials');
+                    if (matGroup) matGroup.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                } else {
+                    if (aiSuggestion) aiSuggestion.hidden = true;
+                }
+            });
+        }
+
+        const readSelections = () => {
+            const getValues = (sel) => Array.from(document.querySelectorAll(`#msq-modal [data-group="${sel}"] .chip.active`)).map(c => c.getAttribute('data-value'));
+            const habitatType = getValues('habitatType');
+            const purpose = getValues('purpose');
+            const style = getValues('style')[0] || null;
+            const palette = getValues('palette')[0] || null;
+            let materials = getValues('materials');
+            if (aiToggle && aiToggle.checked) materials = predictMaterials();
+            const floors = floorsInput ? Math.max(1, Math.min(50, parseInt(floorsInput.value, 10) || 1)) : 1;
+            const crew = crewInput ? Math.max(1, Math.min(500, parseInt(crewInput.value, 10) || 1)) : 1;
+            return { habitatType, purpose, style, palette, materials, floors, crew };
+        };
+
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => {
+                const sel = readSelections();
+                // Apply floors
+                this.ensureHabitatExists();
+                this.numFloors = sel.floors;
+                this.buildFloors();
+                // Update crew capacity display if provided explicitly
+                const crewDisplay = document.getElementById('crew-display');
+                if (crewDisplay && sel.crew) crewDisplay.textContent = sel.crew;
+                // Map style/palette to theme accent subtly
+                if (sel.palette) {
+                    const root = document.documentElement;
+                    switch (sel.palette) {
+                        case 'Soft pastels': root.style.setProperty('--accent', '#60a5fa'); break;
+                        case 'Neon sci-fi': root.style.setProperty('--accent', '#00d4ff'); break;
+                        case 'Earth tones': root.style.setProperty('--accent', '#22c55e'); break;
+                    }
+                }
+                // If Minimalist, turn off vibrant; if Futuristic, turn on vibrant
+                if (sel.style) {
+                    const wasVibrant = this.vibrantEnabled;
+                    if (sel.style === 'Minimalist') this.vibrantEnabled = false;
+                    if (sel.style === 'Futuristic') this.vibrantEnabled = true;
+                    if (wasVibrant !== this.vibrantEnabled) this.buildFloors();
+                }
+                // Persist or log selection
+                localStorage.setItem('shd-msq', JSON.stringify(sel));
+                close();
+            });
+        }
+    }
+
+    clearDesignForAIPrediction() {
+        this.clearWorkspace();
+    }
+
+    clearWorkspace() {
+        // Clear systems
+        this.clearSystems();
+        // Clear floors, objects, partitions
+        if (this.floorObjectsGroup) this.floorObjectsGroup.clear();
+        if (this.floorPartitionsGroup) this.floorPartitionsGroup.clear();
+        if (this.floorGroup) this.floorGroup.clear();
+        // Clear habitat geometry
+        if (this.habitatGroup) this.habitatGroup.clear();
+        // Reset selection, planner, and view
+        this.selectedFloorIndex = null;
+        this.isPlanner = false;
+        document.body.classList.remove('planner-active');
+        this.setView('reset');
+        // Reset readouts
+        const zero = (id) => { const el = document.getElementById(id); if (el) el.textContent = '0'; };
+        zero('volume-display'); zero('surface-display'); zero('crew-display'); zero('systems-count');
+    }
+
+    setView(viewType) {
+        const distance = 50;
+        
+        switch (viewType) {
+            case 'top':
+                this.camera.position.set(0, distance, 0);
+                this.camera.lookAt(0, 0, 0);
+                break;
+            case 'side':
+                this.camera.position.set(distance, 0, 0);
+                this.camera.lookAt(0, 0, 0);
+                break;
+            case 'front':
+                this.camera.position.set(0, 0, distance);
+                this.camera.lookAt(0, 0, 0);
+                break;
+            case 'reset':
+                this.camera.position.set(30, 30, 30);
+                this.camera.lookAt(0, 0, 0);
+                break;
+        }
+    }
+
+    saveLayout() {
+        const layout = {
+            shape: this.currentShape,
+            radius: this.currentRadius,
+            height: this.currentHeight,
+            systems: this.getEnabledSystems(),
+            timestamp: new Date().toISOString()
+        };
+
+        const dataStr = JSON.stringify(layout, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `space-habitat-layout-${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+    }
+
+    loadLayout() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const layout = JSON.parse(e.target.result);
+                        this.loadLayoutData(layout);
+                    } catch (error) {
+                        alert('Error loading layout file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+        
+        input.click();
+    }
+
+    loadLayoutData(layout) {
+        // Update shape and dimensions
+        document.getElementById('shape-type').value = layout.shape;
+        document.getElementById('radius').value = layout.radius;
+        document.getElementById('height').value = layout.height;
+        document.getElementById('radius-value').textContent = layout.radius;
+        document.getElementById('height-value').textContent = layout.height;
+        
+        this.currentShape = layout.shape;
+        this.currentRadius = layout.radius;
+        this.currentHeight = layout.height;
+        
+        // Update systems
+        const systemIds = [
+            'life-support', 'power', 'waste', 'thermal', 'communications',
+            'medical', 'sleep', 'exercise', 'food', 'stowage'
+        ];
+        
+        systemIds.forEach(id => {
+            document.getElementById(id).checked = layout.systems.includes(id);
+        });
+        
+        // Recreate habitat and layout
+        this.createHabitat();
+        this.autoLayout();
+    }
+
+    onWindowResize() {
+        const canvas = document.getElementById('habitat-canvas');
+        this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        
+        // Rotate habitat slowly (pause rotation in planner for stability)
+        if (!this.isPlanner) this.habitatGroup.rotation.y += 0.005;
+
+        // Simple gravity drop for placed objects
+        const dt = Math.min(0.033, this.clock.getDelta());
+        if (this.activeDrops.length) {
+            const g = -9.8; // m/s^2
+            this.activeDrops = this.activeDrops.filter(entry => {
+                const { obj, vy } = entry;
+                let newVy = vy + g * dt;
+                obj.position.y += newVy * dt;
+                // Determine target floor top - use lockedFloor
+                const lockedFloor = obj.userData && obj.userData.lockedFloor != null ? obj.userData.lockedFloor : 
+                                   (obj.userData && obj.userData.floorIndex != null ? obj.userData.floorIndex : null);
+                if (lockedFloor == null) {
+                    return false;
+                }
+                const fidx = lockedFloor;
+                const floorSkeleton = this.floorSkeletons[fidx];
+                if (!floorSkeleton) return false;
+                const bbox = new THREE.Box3().setFromObject(obj);
+                const objHeight = bbox.max.y - bbox.min.y;
+                const floorTop = floorSkeleton.position.y + this.floorThickness / 2;
+                const targetY = floorTop + objHeight / 2;
+                if (obj.position.y <= targetY) {
+                    obj.position.y = targetY;
+                    console.log(`Furniture ${obj.userData.furnitureKey} settled on floor ${fidx} at Y=${targetY}`);
+                    return false; // stop dropping
+                }
+                entry.vy = newVy;
+                return true;
+            });
+        }
+
+        // Stick furniture to flooring only when floors are moving (e.g., focus animation)
+        // Only run this when a floor is selected (raised) or when in planner mode
+        if ((this.selectedFloorIndex != null || this.isPlanner) && this.floorObjectsGroup && this.floorSkeletons) {
+            this.floorObjectsGroup.children.forEach(obj => {
+                if (!obj || !obj.parent) return;
+                // Skip if object is currently dropping
+                const dropping = this.activeDrops.find(d => d.obj === obj);
+                if (dropping) return;
+                // Use lockedFloor if available, otherwise fallback to floorIndex
+                const lockedFloor = obj.userData && obj.userData.lockedFloor != null ? obj.userData.lockedFloor : 
+                                   (obj.userData && obj.userData.floorIndex != null ? obj.userData.floorIndex : 0);
+                const floorSkeleton = this.floorSkeletons[lockedFloor];
+                if (!floorSkeleton) return;
+                const bbox = new THREE.Box3().setFromObject(obj);
+                const h = bbox.max.y - bbox.min.y;
+                const floorTop = floorSkeleton.position.y + this.floorThickness / 2;
+                const target = floorTop + h / 2;
+                const dy = target - obj.position.y;
+                if (Math.abs(dy) > 0.001) {
+                    obj.position.y += Math.sign(dy) * Math.min(Math.abs(dy), 0.05);
+                    if (Math.abs(target - obj.position.y) <= 0.002) obj.position.y = target;
+                }
+            });
+        }
+        
+        // Update controls
+        this.controls.update();
+        
+        // Render
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    getCurrentTheme() {
+        const attr = document.documentElement.getAttribute('data-theme');
+        return attr === 'dark' ? 'dark' : 'light';
+    }
+
+    applyThemeToWorkspace(theme) {
+        // Palette mapped to themes
+        const palettes = {
+            dark: {
+                background: 0x0b1220,
+                grid1: 0x444444,
+                grid2: 0x222222,
+                accent: 0x00d4ff,
+                ambientIntensity: 0.45,
+                pointColor: 0x00d4ff
+            },
+            light: {
+                background: 0xe9eef7,
+                grid1: 0xbcc7dd,
+                grid2: 0xd6deee,
+                accent: 0x2563eb,
+                ambientIntensity: 0.6,
+                pointColor: 0x22d3ee
+            }
+        };
+
+        const p = palettes[theme] || palettes.dark;
+
+        if (this.scene) {
+            this.scene.background = new THREE.Color(p.background);
+        }
+        if (this.gridHelper) {
+            this.gridHelper.material.color = new THREE.Color(p.grid1);
+            this.gridHelper.material.vertexColors = false;
+            // Recreate grid with new colors to ensure both major/minor lines update
+            this.addGrid();
+        }
+        if (this.ambientLight) this.ambientLight.intensity = p.ambientIntensity;
+        if (this.pointLight) this.pointLight.color = new THREE.Color(p.pointColor);
+        if (this.habitatMaterial) this.habitatMaterial.color = new THREE.Color(p.accent);
+        if (this.wireframeMaterial) this.wireframeMaterial.color = new THREE.Color(p.accent);
+        // Outline color
+        if (this.outlineGroup) {
+            const edgeColor = theme === 'dark' ? 0x8ab4ff : 0x1e3a8a;
+            this.outlineGroup.children.forEach(line => {
+                if (line.material && line.material.color) line.material.color = new THREE.Color(edgeColor);
+            });
+        }
+        // Update floors theming
+        if (this.floorGroup) {
+            const themeIsDark = theme === 'dark';
+            const base = themeIsDark ? 0x0e1627 : 0xdfe6f3;
+            const selected = themeIsDark ? 0x1f2a44 : 0xbfd0ef;
+            this.floorGroup.children.forEach((floorMesh, idx) => {
+                const isSelected = idx === this.selectedFloorIndex;
+                floorMesh.material.color = new THREE.Color(isSelected ? selected : base);
+                floorMesh.material.opacity = isSelected ? 0.35 : 0.25;
+                floorMesh.material.transparent = true;
+            });
+        }
+        // Update partition wall colors
+        if (this.floorPartitionsGroup) {
+            const wallColor = theme === 'dark' ? 0x9fb7ff : 0x3b5bdb;
+            this.floorPartitionsGroup.traverse(n => {
+                if (n.isMesh && n.material && n.material.color) {
+                    n.material.color = new THREE.Color(wallColor);
+                }
+            });
+        }
+    }
+
+    setViewMode(mode) {
+        this.viewMode = mode;
+        const showWire = mode === 'wire';
+        const showOutline = mode === 'outline';
+        // Habitat mesh (first mesh child) and its wireframe (line segments)
+        this.habitatGroup.children.forEach(obj => {
+            if (obj.isMesh) obj.visible = !this.habitatDisabled && !showWire && !showOutline; // visible only in solid when enabled
+            if (obj.isLineSegments) obj.visible = !this.habitatDisabled && showWire;          // visible only in wire when enabled
+        });
+        if (this.outlineGroup) this.outlineGroup.visible = showOutline;
+        this.refreshOutline();
+    }
+
+    refreshOutline() {
+        if (!this.outlineGroup) return;
+        while (this.outlineGroup.children.length) this.outlineGroup.remove(this.outlineGroup.children[0]);
+        if (this.viewMode !== 'outline' || this.habitatDisabled) return;
+        const mesh = this.habitatGroup.children.find(o => o.isMesh);
+        if (!mesh || !mesh.geometry) return;
+        const edges = new THREE.EdgesGeometry(mesh.geometry, 15);
+        const theme = this.getCurrentTheme();
+        const edgeColor = theme === 'dark' ? 0x8ab4ff : 0x1e3a8a;
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: edgeColor }));
+        this.outlineGroup.add(line);
+    }
+
+    // (Legacy plan modal removed; MSQ modal is the Plan Setup now)
+
+    buildFloors() {
+        if (!this.floorGroup) return;
+        // Clear
+        this.floorGroup.clear();
+        if (this.floorPartitionsGroup) this.floorPartitionsGroup.clear();
+        if (!this.numFloors || this.numFloors < 1) return;
+
+        const theme = this.getCurrentTheme();
+        const baseColor = theme === 'dark' ? 0x0e1627 : 0xdfe6f3;
+        const vibrantPalette = [0xf87272, 0xfbbf24, 0x34d399, 0x60a5fa, 0xa78bfa, 0xf472b6];
+        const width = this.currentRadius * 2.2;
+        const depth = this.currentRadius * 2.2;
+        const height = this.currentHeight;
+        const gap = height / (this.numFloors + 1);
+
+        // Create individual floor skeletons
+        this.floorSkeletons = [];
+        
+        for (let i = 0; i < this.numFloors; i++) {
+            const y = -height / 2 + (i + 1) * gap;
+            
+            // Create individual skeleton group for this floor
+            const floorSkeleton = new THREE.Group();
+            floorSkeleton.position.y = y;
+            floorSkeleton.userData = { 
+                floorIndex: i, 
+                baseY: y,
+                isFloorSkeleton: true 
+            };
+            
+            // Create the flooring mesh
+            const geometry = new THREE.BoxGeometry(width, this.floorThickness, depth);
+            const color = this.vibrantEnabled ? vibrantPalette[i % vibrantPalette.length] : baseColor;
+            const material = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.5 });
+            const floorMesh = new THREE.Mesh(geometry, material);
+            floorMesh.position.y = 0; // Position relative to skeleton
+            floorMesh.castShadow = true; 
+            floorMesh.receiveShadow = true;
+            floorMesh.userData = { 
+                floorIndex: i, 
+                isFlooring: true,
+                parentSkeleton: floorSkeleton 
+            };
+            
+            // Add flooring to skeleton
+            floorSkeleton.add(floorMesh);
+            
+            // Add skeleton to main floor group
+            this.floorGroup.add(floorSkeleton);
+            this.floorSkeletons.push(floorSkeleton);
+        }
+        
+        // Create floor selection buttons
+        this.createFloorSelectionButtons();
+        // Adjust existing furniture Y to new floor slabs - use lockedFloor
+        this.floorObjectsGroup.children.forEach(obj => {
+            const lockedFloor = obj.userData && obj.userData.lockedFloor != null ? obj.userData.lockedFloor : 
+                               (obj.userData && obj.userData.floorIndex != null ? obj.userData.floorIndex : 0);
+            const floorSkeleton = this.floorSkeletons[lockedFloor];
+            if (!floorSkeleton) return;
+            const bbox = new THREE.Box3().setFromObject(obj);
+            const h = bbox.max.y - bbox.min.y;
+            const floorTop = floorSkeleton.position.y + this.floorThickness / 2;
+            obj.position.y = floorTop + h / 2;
+        });
+
+        // Build partitions after floors exist
+        this.buildFloorPartitions();
+    }
+
+    createFloorSelectionButtons() {
+        const container = document.getElementById('floor-selection-buttons');
+        if (!container) return;
+        
+        // Clear existing buttons
+        container.innerHTML = '';
+        
+        // Create buttons for each floor
+        for (let i = 0; i < this.numFloors; i++) {
+            const button = document.createElement('button');
+            button.className = 'floor-btn';
+            button.textContent = `Floor ${i + 1}`;
+            button.dataset.floorIndex = i;
+            button.addEventListener('click', () => this.selectFloorByButton(i));
+            container.appendChild(button);
+        }
+        
+        // Initially disable all buttons if no floors exist
+        if (this.numFloors === 0) {
+            container.innerHTML = '<p style="color: var(--muted-text); font-size: 0.9rem;">No floors available. Use Plan Setup to create floors.</p>';
+        }
+    }
+
+    buildFloorPartitions() {
+        if (!this.floorPartitionsGroup) return;
+        this.floorPartitionsGroup.clear();
+        if (!this.numFloors || this.numFloors < 1) return;
+
+        const theme = this.getCurrentTheme();
+        const wallColor = theme === 'dark' ? 0x9fb7ff : 0x3b5bdb;
+        const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, metalness: 0.1, roughness: 0.6, transparent: true, opacity: 0.85 });
+
+        const width = this.currentRadius * 2.2;
+        const depth = this.currentRadius * 2.2;
+        const gap = this.currentHeight / (this.numFloors + 1);
+        const wallHeight = Math.max(2, Math.min(3.2, gap * 0.85));
+        const wallThickness = Math.max(0.06, Math.min(0.12, Math.min(width, depth) * 0.01));
+
+        // Read MSQ selections for purpose and crew to influence density
+        let purposeSet = new Set();
+        let crewSize = 0;
+        try {
+            const sel = JSON.parse(localStorage.getItem('shd-msq'));
+            if (sel && Array.isArray(sel.purpose)) purposeSet = new Set(sel.purpose);
+            if (sel && sel.crew) crewSize = parseInt(sel.crew, 10) || 0;
+        } catch {}
+
+        const targetRoomArea = purposeSet.has('Research') ? 16 : purposeSet.has('Mixed-use') ? 20 : 12; // m^2
+        const roomsX = Math.max(1, Math.floor(width / Math.sqrt(targetRoomArea)));
+        const roomsZ = Math.max(1, Math.floor(depth / Math.sqrt(targetRoomArea)));
+        const corridorWidth = purposeSet.has('Emergency shelter') ? 1.6 : 1.2;
+
+        // Adjust density by crew size
+        const densityFactor = crewSize > 24 ? 1.3 : crewSize > 12 ? 1.1 : 1.0;
+        const gridX = Math.max(1, Math.round(roomsX * densityFactor));
+        const gridZ = Math.max(1, Math.round(roomsZ * densityFactor));
+
+        const minX = -width / 2;
+        const minZ = -depth / 2;
+        const cellW = width / gridX;
+        const cellD = depth / gridZ;
+
+        const addWall = (x1, z1, x2, z2, y, floorIdx) => {
+            const dx = x2 - x1;
+            const dz = z2 - z1;
+            const len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 0.01) return;
+            const geo = new THREE.BoxGeometry(len, wallHeight, wallThickness);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            const angle = Math.atan2(dz, dx);
+            mesh.position.set((x1 + x2) / 2, y + wallHeight / 2, (z1 + z2) / 2);
+            mesh.rotation.y = angle;
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            mesh.userData = Object.assign({}, mesh.userData, { floorIndex: floorIdx });
+            this.floorPartitionsGroup.add(mesh);
+        };
+
+        for (let i = 0; i < this.numFloors; i++) {
+            const y = this.floorGroup.children[i].position.y;
+            // Build grid lines; leave a central cross as corridor
+            const corridorX = 0; // centered
+            const corridorZ = 0; // centered
+            const halfCX = corridorWidth / 2;
+            const halfCZ = corridorWidth / 2;
+
+            // Vertical walls (along Z axis, varying X)
+            for (let gx = 1; gx < gridX; gx++) {
+                const x = minX + gx * cellW;
+                // Skip corridor band
+                if (x > corridorX - halfCX && x < corridorX + halfCX) continue;
+                addWall(x, minZ, x, -minZ, y, i);
+            }
+            // Horizontal walls (along X axis, varying Z)
+            for (let gz = 1; gz < gridZ; gz++) {
+                const z = minZ + gz * cellD;
+                if (z > corridorZ - halfCZ && z < corridorZ + halfCZ) continue;
+                addWall(minX, z, -minX, z, y, i);
+            }
+            // Outer boundary light rails for visual clarity
+            addWall(minX, minZ, -minX, minZ, y, i);
+            addWall(minX, -minZ, -minX, -minZ, y, i);
+            addWall(minX, minZ, minX, -minZ, y, i);
+            addWall(-minX, minZ, -minX, -minZ, y, i);
+        }
+    }
+
+    selectFloorByButton(index) {
+        console.log(`Selecting floor ${index}`);
+        // Update button states
+        this.updateFloorButtonStates(index);
+        
+        // Select the floor
+        this.setSelectedFloor(index);
+        
+        // Enter planner mode automatically when a floor is selected
+        if (!this.isPlanner) {
+            this.enterPlannerMode();
+        }
+        console.log(`Selected floor ${index}, isPlanner: ${this.isPlanner}, selectedFloorIndex: ${this.selectedFloorIndex}`);
+        
+        // Debug: Check all floors state
+        this.debugFloorStates();
+    }
+
+    debugFloorStates() {
+        console.log('=== FLOOR STATES DEBUG ===');
+        console.log(`Total floor skeletons: ${this.floorSkeletons ? this.floorSkeletons.length : 0}`);
+        if (this.floorSkeletons) {
+            this.floorSkeletons.forEach((skeleton, index) => {
+                console.log(`Floor skeleton ${index}:`, {
+                    position: skeleton.position,
+                    baseY: skeleton.userData.baseY,
+                    visible: skeleton.visible,
+                    floorIndex: skeleton.userData.floorIndex,
+                    children: skeleton.children.length
+                });
+                skeleton.children.forEach((child, childIndex) => {
+                    if (child.userData && child.userData.isFlooring) {
+                        console.log(`  Flooring ${childIndex}:`, {
+                            position: child.position,
+                            opacity: child.material.opacity,
+                            visible: child.visible
+                        });
+                    }
+                });
+            });
+        }
+        console.log('=== END FLOOR STATES ===');
+    }
+
+    updateFloorButtonStates(selectedIndex) {
+        const buttons = document.querySelectorAll('.floor-btn');
+        buttons.forEach((button, index) => {
+            if (index === selectedIndex) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    }
+
+    setSelectedFloor(index) {
+        console.log(`Setting selected floor to ${index}`);
+        this.selectedFloorIndex = index;
+        const theme = this.getCurrentTheme();
+        this.applyThemeToWorkspace(theme);
+        // Pop-out effect: raise selected floor skeleton, dim others, show only its partitions and objects
+        const raiseAmount = 3;
+        this.floorSkeletons.forEach((floorSkeleton, idx) => {
+            const baseY = floorSkeleton.userData.baseY;
+            if (baseY == null) {
+                // Store the current position as baseY if not already stored
+                floorSkeleton.userData.baseY = floorSkeleton.position.y;
+            }
+            const isSel = idx === index;
+            const newY = floorSkeleton.userData.baseY + (isSel ? raiseAmount : 0);
+            floorSkeleton.position.y = newY;
+            
+            // Update flooring opacity within the skeleton
+            floorSkeleton.children.forEach(child => {
+                if (child.userData && child.userData.isFlooring) {
+                    child.material.opacity = isSel ? 0.4 : 0.15;
+                }
+            });
+            
+            console.log(`Floor skeleton ${idx}: baseY=${floorSkeleton.userData.baseY}, newY=${newY}, isSelected=${isSel}, visible=${floorSkeleton.visible}`);
+        });
+        // Toggle partitions visibility per floor
+        this.floorPartitionsGroup.children.forEach(w => {
+            const fidx = (w.userData && w.userData.floorIndex != null) ? w.userData.floorIndex : -1;
+            w.visible = fidx === index;
+        });
+        // Toggle furniture visibility per floor - use lockedFloor
+        this.floorObjectsGroup.children.forEach(obj => {
+            const lockedFloor = obj.userData && obj.userData.lockedFloor != null ? obj.userData.lockedFloor : 
+                               (obj.userData && obj.userData.floorIndex != null ? obj.userData.floorIndex : -1);
+            obj.visible = lockedFloor === index;
+        });
+        // Camera top-down on selected floor
+        const selectedSkeleton = this.floorSkeletons[index];
+        const targetY = selectedSkeleton.position.y + 20;
+        this.camera.position.set(0, targetY, 0.001);
+        this.camera.lookAt(0, selectedSkeleton.position.y, 0);
+        console.log(`Camera positioned at Y=${targetY}, looking at floor Y=${selectedSkeleton.position.y}`);
+        // Update furniture positions to match the raised floor
+        this.updateFurniturePositions();
+    }
+
+    resetFloorFocus() {
+        // Restore all floor skeletons to base positions and default visibility
+        if (this.floorSkeletons) {
+            this.floorSkeletons.forEach((floorSkeleton, index) => {
+                const baseY = floorSkeleton.userData.baseY;
+                if (baseY != null) {
+                    floorSkeleton.position.y = baseY;
+                }
+                
+                // Reset flooring opacity within the skeleton
+                floorSkeleton.children.forEach(child => {
+                    if (child.userData && child.userData.isFlooring) {
+                        child.material.opacity = 0.25;
+                    }
+                });
+            });
+        }
+        if (this.floorPartitionsGroup) {
+            this.floorPartitionsGroup.children.forEach(w => { w.visible = true; });
+        }
+        if (this.floorObjectsGroup) {
+            this.floorObjectsGroup.children.forEach(obj => { obj.visible = true; });
+        }
+        // Re-apply theming for selected state reset
+        const theme = this.getCurrentTheme();
+        this.selectedFloorIndex = null;
+        this.applyThemeToWorkspace(theme);
+        
+        // Update button states - no floor selected
+        this.updateFloorButtonStates(-1);
+    }
+
+    updateFurniturePositions() {
+        // Force update all furniture positions to match their locked floors
+        if (this.floorObjectsGroup && this.floorSkeletons) {
+            this.floorObjectsGroup.children.forEach(obj => {
+                if (!obj || !obj.parent) return;
+                const lockedFloor = obj.userData && obj.userData.lockedFloor != null ? obj.userData.lockedFloor : 
+                                   (obj.userData && obj.userData.floorIndex != null ? obj.userData.floorIndex : 0);
+                const floorSkeleton = this.floorSkeletons[lockedFloor];
+                if (!floorSkeleton) return;
+                const bbox = new THREE.Box3().setFromObject(obj);
+                const h = bbox.max.y - bbox.min.y;
+                const floorTop = floorSkeleton.position.y + this.floorThickness / 2;
+                const target = floorTop + h / 2;
+                obj.position.y = target;
+            });
+        }
+    }
+
+    // ----- Placement -----
+    togglePlacement() {
+        this.placementEnabled = !this.placementEnabled;
+        const btn = document.getElementById('toggle-placement');
+        if (btn) btn.textContent = `Placement: ${this.placementEnabled ? 'On' : 'Off'}`;
+        // When enabling placement, switch to top view for better insertion
+        if (this.placementEnabled) {
+            if (this.selectedFloorIndex != null) {
+                this.enterPlannerMode();
+            } else {
+                this.setView('top');
+            }
+        } else if (this.isPlanner) {
+            // When disabling placement, exit planner
+            this.exitPlannerMode();
+        }
+    }
+
+    onPointerMove(event) {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    onCanvasClick(event) {
+        console.log(`Canvas click - placementEnabled: ${this.placementEnabled}, isPlanner: ${this.isPlanner}, selectedFloorIndex: ${this.selectedFloorIndex}`);
+        // Only handle placement clicks when in planner mode with placement enabled
+        if (this.placementEnabled && this.isPlanner && this.selectedFloorIndex != null) {
+            const hits = this.getIntersections();
+            console.log(`Found ${hits.length} hits`);
+            const floorHit = hits.find(h => h.object && h.object.parent === this.floorGroup);
+            if (floorHit) {
+                const idx = floorHit.object.userData.floorIndex;
+                console.log(`Hit floor ${idx}, selected floor is ${this.selectedFloorIndex}`);
+                if (idx === this.selectedFloorIndex) {
+                    const p = floorHit.point;
+                    if (this.snapEnabled) {
+                        p.x = Math.round(p.x);
+                        p.z = Math.round(p.z);
+                    }
+                    console.log(`Placing object on floor ${idx} at position:`, p);
+                    this.placeObjectAt(p, idx);
+                }
+            } else {
+                // If no floor hit, try to place on the selected floor anyway
+                // This handles cases where the raised floor might not be hit by the ray
+                console.log(`No floor hit, trying to place on selected floor ${this.selectedFloorIndex}`);
+                const selectedFloor = this.floorGroup.children[this.selectedFloorIndex];
+                if (selectedFloor) {
+                    // Create a point on the selected floor at the click position
+                    const p = new THREE.Vector3();
+                    this.raycaster.setFromCamera(this.pointer, this.camera);
+                    
+                    // Project the ray onto the selected floor's Y plane
+                    const floorY = selectedFloor.userData.baseY + this.floorThickness / 2;
+                    console.log(`Projecting onto floor Y=${floorY}, camera Y=${this.camera.position.y}, ray direction Y=${this.raycaster.ray.direction.y}`);
+                    
+                    if (Math.abs(this.raycaster.ray.direction.y) > 0.001) {
+                        const distance = (floorY - this.camera.position.y) / this.raycaster.ray.direction.y;
+                        p.copy(this.raycaster.ray.direction).multiplyScalar(distance).add(this.raycaster.ray.origin);
+                        console.log(`Calculated distance: ${distance}, projected point:`, p);
+                    } else {
+                        // If ray is nearly horizontal, use a simple projection
+                        p.set(0, floorY, 0);
+                        console.log(`Using simple projection to Y=${floorY}`);
+                    }
+                    
+                    if (this.snapEnabled) {
+                        p.x = Math.round(p.x);
+                        p.z = Math.round(p.z);
+                    }
+                    console.log(`Placing object on selected floor ${this.selectedFloorIndex} at projected position:`, p);
+                    this.placeObjectAt(p, this.selectedFloorIndex);
+                } else {
+                    console.log(`Selected floor ${this.selectedFloorIndex} not found!`);
+                }
+            }
+        }
+    }
+
+    getIntersections() {
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+        const hits = this.raycaster.intersectObjects(this.floorGroup.children, true);
+        console.log(`Raycasting found ${hits.length} hits`);
+        hits.forEach((hit, i) => {
+            const floorIndex = hit.object.userData.floorIndex;
+            const isFlooring = hit.object.userData.isFlooring;
+            console.log(`Hit ${i}: floor ${floorIndex}, isFlooring: ${isFlooring}, distance: ${hit.distance}, point:`, hit.point);
+        });
+        return hits;
+    }
+
+    placeObjectAt(worldPoint, floorIdx) {
+        const theme = this.getCurrentTheme();
+        const prefab = this.createFurniturePrefab(this.placementObjectType, theme);
+        prefab.position.copy(worldPoint);
+        const floorSkeleton = this.floorSkeletons[floorIdx];
+        const floorY = floorSkeleton ? floorSkeleton.position.y : 0;
+        const bbox = new THREE.Box3().setFromObject(prefab);
+        const height = bbox.max.y - bbox.min.y;
+        const yOffset = height / 2;
+        // Spawn slightly above, then let gravity settle
+        prefab.position.y = floorY + yOffset + 2;
+        // Assign unique key and lock to floor
+        const furnitureKey = `furniture_${this.furnitureKeyCounter++}_floor_${floorIdx}`;
+        prefab.userData = Object.assign({}, prefab.userData, { 
+            floorIndex: floorIdx, 
+            furnitureKey: furnitureKey,
+            lockedFloor: floorIdx 
+        });
+        console.log(`Placed ${this.placementObjectType} on floor ${floorIdx} with key ${furnitureKey}`);
+        this.floorObjectsGroup.add(prefab);
+        this.selectedObject = prefab;
+        // Begin drop
+        this.activeDrops.push({ obj: prefab, vy: 0 });
+    }
+
+    getFurnitureColor(theme) {
+        if (!this.vibrantEnabled) return theme === 'dark' ? 0xffc857 : 0x2563eb;
+        // Cycle vibrant colors for variety
+        const palette = [0xef4444, 0xf59e0b, 0x10b981, 0x06b6d4, 0x8b5cf6, 0xec4899, 0x84cc16];
+        const idx = this.floorObjectsGroup.children.length % palette.length;
+        return palette[idx];
+    }
+
+    toggleVibrantColors(btn) {
+        this.vibrantEnabled = !this.vibrantEnabled;
+        if (btn) btn.textContent = `Vibrant Colors: ${this.vibrantEnabled ? 'On' : 'Off'}`;
+        // Recolor floors
+        this.buildFloors();
+        // Recolor existing furniture
+        const theme = this.getCurrentTheme();
+        this.floorObjectsGroup.children.forEach((obj, i) => {
+            // Skip realistic furniture that manages its own materials
+            if (obj.userData && obj.userData.allowRecolor === false) return;
+            const palette = [0xef4444, 0xf59e0b, 0x10b981, 0x06b6d4, 0x8b5cf6, 0xec4899, 0x84cc16];
+            const color = this.vibrantEnabled ? palette[i % palette.length] : (theme === 'dark' ? 0xffc857 : 0x2563eb);
+            if (obj.material) obj.material.color = new THREE.Color(color);
+            if (obj.children) {
+                obj.traverse(n => { if (n.isMesh && n.material && n.material.color) n.material.color = new THREE.Color(color); });
+            }
+        });
+    }
+
+    createFurniturePrefab(type, theme) {
+        const group = new THREE.Group();
+        const metal = (color = 0xb0b8c2, metalness = 0.8, roughness = 0.3) => new THREE.MeshStandardMaterial({ color, metalness, roughness });
+        const wood = (color = 0x8b5a2b, roughness = 0.7) => new THREE.MeshStandardMaterial({ color, metalness: 0.2, roughness });
+        const fabric = (color = theme === 'dark' ? 0x2b3142 : 0xd7dee9) => new THREE.MeshStandardMaterial({ color, metalness: 0.0, roughness: 0.9 });
+        const plastic = (color = 0xf0f3f9) => new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.6 });
+
+        const addLegs = (parent, legRadius, legHeight, positions, mat) => {
+            positions.forEach(([x, z]) => {
+                const geo = new THREE.CylinderGeometry(legRadius, legRadius, legHeight, 16);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, legHeight / 2, z);
+                mesh.castShadow = true; mesh.receiveShadow = true;
+                parent.add(mesh);
+            });
+        };
+
+        switch (type) {
+            case 'bed': {
+                // Frame
+                const frameGeo = new THREE.BoxGeometry(2.1, 0.2, 1.1);
+                const frame = new THREE.Mesh(frameGeo, wood(0x7b4e2e));
+                frame.position.y = 0.1;
+                frame.castShadow = true; frame.receiveShadow = true;
+                group.add(frame);
+                // Mattress
+                const mattressGeo = new THREE.BoxGeometry(2.0, 0.25, 1.0);
+                const mattress = new THREE.Mesh(mattressGeo, fabric(theme === 'dark' ? 0x3b4861 : 0xe9f0fb));
+                mattress.position.y = 0.35;
+                mattress.castShadow = true; mattress.receiveShadow = true;
+                group.add(mattress);
+                // Pillows
+                const pillowMat = fabric(theme === 'dark' ? 0xbcd7ff : 0x9fb7ff);
+                const pillowGeo = new THREE.BoxGeometry(0.5, 0.15, 0.35);
+                const pillow1 = new THREE.Mesh(pillowGeo, pillowMat);
+                pillow1.position.set(-0.55, 0.5, -0.2);
+                const pillow2 = pillow1.clone();
+                pillow2.position.z = 0.2;
+                [pillow1, pillow2].forEach(p => { p.castShadow = true; p.receiveShadow = true; group.add(p); });
+                // Headboard
+                const headGeo = new THREE.BoxGeometry(0.08, 0.9, 1.1);
+                const head = new THREE.Mesh(headGeo, wood(0x6a4024));
+                head.position.set(-1.05, 0.55, 0);
+                head.castShadow = true; head.receiveShadow = true;
+                group.add(head);
+                group.userData.allowRecolor = false;
+                break;
+            }
+            case 'table': {
+                // Top
+                const topGeo = new THREE.BoxGeometry(1.6, 0.08, 1.0);
+                const top = new THREE.Mesh(topGeo, wood(0x8c6239));
+                top.position.y = 0.8;
+                top.castShadow = true; top.receiveShadow = true;
+                group.add(top);
+                // Legs
+                const legMat = metal(0x9aa3ad, 0.7, 0.35);
+                const offsetX = 1.6/2 - 0.1, offsetZ = 1.0/2 - 0.1;
+                addLegs(group, 0.05, 0.8, [
+                    [ offsetX,  offsetZ],
+                    [-offsetX,  offsetZ],
+                    [ offsetX, -offsetZ],
+                    [-offsetX, -offsetZ]
+                ], legMat);
+                group.userData.allowRecolor = false;
+                break;
+            }
+            case 'chair': {
+                // Seat
+                const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.5), fabric(theme === 'dark' ? 0x43516a : 0xcfd8e6));
+                seat.position.y = 0.5;
+                seat.castShadow = true; seat.receiveShadow = true;
+                group.add(seat);
+                // Backrest
+                const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.06), fabric(theme === 'dark' ? 0x43516a : 0xcfd8e6));
+                back.position.set(0, 0.8, -0.22);
+                back.castShadow = true; back.receiveShadow = true;
+                group.add(back);
+                // Legs
+                const legMat = metal(0x9aa3ad);
+                addLegs(group, 0.03, 0.5, [
+                    [ 0.22,  0.22],
+                    [-0.22,  0.22],
+                    [ 0.22, -0.22],
+                    [-0.22, -0.22]
+                ], legMat);
+                group.userData.allowRecolor = false;
+                break;
+            }
+            case 'storage': {
+                // Body
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.4, 0.6), plastic(theme === 'dark' ? 0x2e3440 : 0xf5f7fa));
+                body.position.y = 0.7;
+                body.castShadow = true; body.receiveShadow = true;
+                group.add(body);
+                // Doors
+                const doorMat = plastic(theme === 'dark' ? 0x3b4252 : 0xeaeef5);
+                const doorL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.25, 0.02), doorMat);
+                const doorR = doorL.clone();
+                doorL.position.set(-0.26, 0.72, 0.31);
+                doorR.position.set( 0.26, 0.72, 0.31);
+                // Handles
+                const handleMat = metal(0xd6dee6, 0.9, 0.25);
+                const handleL = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 16), handleMat);
+                const handleR = handleL.clone();
+                handleL.rotation.z = Math.PI / 2; handleR.rotation.z = Math.PI / 2;
+                handleL.position.set(-0.1, 0.72, 0.34);
+                handleR.position.set( 0.1, 0.72, 0.34);
+                [doorL, doorR, handleL, handleR].forEach(m => { m.castShadow = true; m.receiveShadow = true; group.add(m); });
+                group.userData.allowRecolor = false;
+                break;
+            }
+            case 'sphere': {
+                const size = 1.5;
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(size * 0.75, 24, 16), new THREE.MeshPhongMaterial({ color: this.getFurnitureColor(theme) }));
+                mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+                group.userData.allowRecolor = true;
+                break;
+            }
+            case 'cylinder': {
+                const size = 1.5;
+                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.6, size * 0.6, size * 1.5, 24), new THREE.MeshPhongMaterial({ color: this.getFurnitureColor(theme) }));
+                mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+                group.userData.allowRecolor = true;
+                break;
+            }
+            case 'cube':
+            default: {
+                const size = 1.5;
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshPhongMaterial({ color: this.getFurnitureColor(theme) }));
+                mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+                group.userData.allowRecolor = true;
+                break;
+            }
+        }
+
+        // Small emissive accents for Futuristic style via palette change
+        const stored = localStorage.getItem('shd-msq');
+        if (stored) {
+            try {
+                const sel = JSON.parse(stored);
+                if (sel && sel.style === 'Futuristic') {
+                    group.traverse(n => {
+                        if (n.isMesh && n.material && 'emissive' in n.material) {
+                            n.material.emissive = new THREE.Color(0x004b6b);
+                            n.material.emissiveIntensity = 0.15;
+                        }
+                    });
+                }
+            } catch {}
+        }
+
+        return group;
+    }
+
+    // Planner mode
+    enterPlannerMode() {
+        if (this.selectedFloorIndex == null) return;
+        this.isPlanner = true;
+        document.body.classList.add('planner-active');
+        // Switch to top-down camera framing the selected floor
+        const idx = this.selectedFloorIndex;
+        const y = this.floorGroup.children[idx].position.y + 20;
+        this.camera.position.set(0, y, 0.001);
+        this.camera.lookAt(0, this.floorGroup.children[idx].position.y, 0);
+    }
+
+    exitPlannerMode() {
+        this.isPlanner = false;
+        document.body.classList.remove('planner-active');
+        // Restore a comfortable perspective
+        this.camera.position.set(30, 30, 30);
+        this.camera.lookAt(0, 0, 0);
+        // Merge popped-out floor back to layout
+        this.resetFloorFocus();
+        // Force update furniture positions after floor restoration
+        this.updateFurniturePositions();
+        // Show all floors and furniture in normal view
+        this.showAllFloorsAndFurniture();
+    }
+
+    showAllFloorsAndFurniture() {
+        // Show all floors with normal opacity
+        if (this.floorGroup) {
+            this.floorGroup.children.forEach((floorMesh) => {
+                floorMesh.material.opacity = 0.25;
+            });
+        }
+        
+        // Show all partitions
+        if (this.floorPartitionsGroup) {
+            this.floorPartitionsGroup.children.forEach(w => { 
+                w.visible = true; 
+            });
+        }
+        
+        // Show all furniture
+        if (this.floorObjectsGroup) {
+            this.floorObjectsGroup.children.forEach(obj => { 
+                obj.visible = true; 
+            });
+        }
+    }
+
+    rotateSelected(delta) {
+        if (!this.selectedObject) return;
+        this.selectedObject.rotation.y += delta;
+    }
+
+    deleteSelected() {
+        if (!this.selectedObject) return;
+        this.floorObjectsGroup.remove(this.selectedObject);
+        this.selectedObject = null;
+    }
+
+    toggleSnap(btn) {
+        this.snapEnabled = !this.snapEnabled;
+        if (btn) btn.textContent = `Snap: ${this.snapEnabled ? 'On' : 'Off'}`;
+    }
+
+    clearSelectedFloorObjects() {
+        if (this.selectedFloorIndex == null) return;
+        const toRemove = this.floorObjectsGroup.children.filter(o => {
+            const lockedFloor = o.userData && o.userData.lockedFloor != null ? o.userData.lockedFloor : 
+                               (o.userData && o.userData.floorIndex != null ? o.userData.floorIndex : -1);
+            return lockedFloor === this.selectedFloorIndex;
+        });
+        toRemove.forEach(o => this.floorObjectsGroup.remove(o));
+    }
+}
+
+// Initialize the application when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Theme bootstrap
+    const savedTheme = localStorage.getItem('shd-theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', initialTheme);
+
+    const toggleBtn = document.getElementById('theme-toggle');
+    const setToggleLabel = (theme) => {
+        if (!toggleBtn) return;
+        if (theme === 'dark') {
+            toggleBtn.textContent = '🌙 Dark';
+        } else {
+            toggleBtn.textContent = '☀️ Light';
+        }
+    };
+    setToggleLabel(initialTheme);
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('shd-theme', next);
+            setToggleLabel(next);
+            document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+        });
+    }
+
+    new SpaceHabitatDesigner();
+});
+
+// Add some interactive features
+document.addEventListener('DOMContentLoaded', () => {
+    // Add hover effects for system items
+    const systemItems = document.querySelectorAll('.system-item');
+    systemItems.forEach(item => {
+        item.addEventListener('mouseenter', () => {
+            item.style.transform = 'scale(1.05)';
+            item.style.transition = 'transform 0.2s ease';
+        });
+        
+        item.addEventListener('mouseleave', () => {
+            item.style.transform = 'scale(1)';
+        });
+    });
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        switch (e.key) {
+            case 'a':
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    document.getElementById('auto-layout').click();
+                }
+                break;
+            case 'c':
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    document.getElementById('clear-layout').click();
+                }
+                break;
+            case 's':
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    document.getElementById('save-layout').click();
+                }
+                break;
+            case 'l':
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    document.getElementById('load-layout').click();
+                }
+                break;
+        }
+    });
+
+    // Add tooltips
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(button => {
+        const shortcuts = {
+            'auto-layout': 'Ctrl+A',
+            'clear-layout': 'Ctrl+C',
+            'save-layout': 'Ctrl+S',
+            'load-layout': 'Ctrl+L'
+        };
+        
+        const shortcut = shortcuts[button.id];
+        if (shortcut) {
+            button.title = `${button.textContent} (${shortcut})`;
+        }
+    });
+});
+

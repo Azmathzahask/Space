@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Habitat Designer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="landing-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🚀 Space Habitat Designer</h1>
+            <p>Design and explore space habitat layouts for crew missions</p>
+            <div style="margin-top: 0.75rem;">
+                <button id="theme-toggle" class="btn btn-secondary" aria-label="Toggle theme">🌙 Dark</button>
+            </div>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h2>Build the Future of Space Living</h2>
+                <p>Design efficient, sustainable space habitats with our advanced 3D planning tool. From cylindrical stations to multi-floor complexes, create optimal living environments for long-duration missions.</p>
+                <div class="hero-buttons">
+                    <a href="signup.html" class="btn btn-primary">Get Started</a>
+                    <a href="signin.html" class="btn btn-secondary">Sign In</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="space-scene">
+                    <div class="stars"></div>
+                    <div class="habitat-preview">
+                        <i class="fas fa-rocket"></i>
+                        <div class="habitat-model">
+                            <div class="cylinder"></div>
+                            <div class="floors">
+                                <div class="floor"></div>
+                                <div class="floor"></div>
+                                <div class="floor"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="features">
+            <h2>Powerful Design Tools</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <i class="fas fa-cube"></i>
+                    <h3>3D Visualization</h3>
+                    <p>Real-time 3D rendering of your habitat designs with multiple view modes and interactive controls.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-cogs"></i>
+                    <h3>Systems Integration</h3>
+                    <p>Incorporate life support, power, waste management, and other critical systems into your layout.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-users"></i>
+                    <h3>Crew Optimization</h3>
+                    <p>Design for crew comfort with sleeping quarters, exercise areas, and recreational spaces.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-save"></i>
+                    <h3>Save & Share</h3>
+                    <p>Save your designs and load them later. Share layouts with your team for collaboration.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-brain"></i>
+                    <h3>AI Assistance</h3>
+                    <p>Get AI-powered suggestions for materials and layouts based on your habitat requirements.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>Analytics</h3>
+                    <p>View detailed metrics including volume, surface area, and crew capacity calculations.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="cta">
+            <h2>Ready to Design Your Space Habitat?</h2>
+            <p>Join thousands of space engineers and architects using our platform to plan the next generation of space stations.</p>
+            <a href="signup.html" class="btn btn-primary">Start Designing Now</a>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2024 Space Habitat Designer. Explore the future of space living.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            // Theme bootstrap
+            const savedTheme = localStorage.getItem('shd-theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', initialTheme);
+
+            const toggleBtn = document.getElementById('theme-toggle');
+            const setToggleLabel = (theme) => {
+                if (!toggleBtn) return;
+                if (theme === 'dark') {
+                    toggleBtn.textContent = '🌙 Dark';
+                } else {
+                    toggleBtn.textContent = '☀️ Light';
+                }
+            };
+            setToggleLabel(initialTheme);
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    const next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    localStorage.setItem('shd-theme', next);
+                    setToggleLabel(next);
+                    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
+                });
+            }
+
+            // Add some interactive effects
+            const featureCards = document.querySelectorAll('.feature-card');
+            featureCards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.style.transform = 'translateY(-5px)';
+                    card.style.transition = 'transform 0.3s ease';
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'translateY(0)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

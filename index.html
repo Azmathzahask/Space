@@ -1,145 +1,194 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Habitat Designer</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Space Habitat Designer</title>
+  <style>
+    /* Reset and base styles */
+    * {
+      box-sizing: border-box;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: url('https://images.unsplash.com/photo-1446776877081-d282a0f896e2?auto=format&fit=crop&w=1472&q=80') no-repeat center center fixed;
+      background-size: cover;
+      filter: brightness(0.8) contrast(1.1);
+      overflow-x: hidden;
+      color: white;
+      text-align: center;
+      position: relative;
+    }
+
+    /* Overlay for better text readability */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Container for content */
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 90vw;
+      padding: 10vh 2rem 2rem 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 6vw;
+      font-weight: 900;
+      margin: 0;
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 15px rgba(0,0,0,0.8);
+      user-select: none;
+    }
+
+    .tagline {
+      font-size: 2vw;
+      font-weight: 400;
+      margin: 1rem 0 2rem 0;
+      text-shadow: 0 0 10px rgba(0,0,0,0.7);
+      user-select: none;
+    }
+
+    .description {
+      font-size: 1.5vw;
+      max-width: 800px;
+      line-height: 1.6;
+      margin-bottom: 3rem;
+      text-shadow: 0 0 8px rgba(0,0,0,0.6);
+    }
+
+    nav {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+    }
+
+    nav a {
+      background-color: #4a90e2;
+      color: white;
+      text-decoration: none;
+      padding: 0.75rem 1.5rem;
+      margin-left: 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: background-color 0.3s;
+    }
+
+    nav a:hover {
+      background-color: #357abd;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 5rem;
+    }
+
+    .feature {
+      background-color: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .feature h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.5rem;
+      color: #e0e0e0;
+    }
+
+    .feature p {
+      margin: 0;
+      font-size: 1rem;
+      color: #cccccc;
+      line-height: 1.5;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 10vw;
+      }
+      .tagline {
+        font-size: 4vw;
+      }
+      .description {
+        font-size: 4vw;
+      }
+      .features {
+        grid-template-columns: 1fr;
+      }
+      nav {
+        position: static;
+        margin-bottom: 2rem;
+      }
+      nav a {
+        display: block;
+        margin: 0.5rem 0;
+        text-align: center;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="landing-container">
-        <!-- Header -->
-        <header class="header">
-            <h1>🚀 Space Habitat Designer</h1>
-            <p>Design and explore space habitat layouts for crew missions</p>
-            <div style="margin-top: 0.75rem;">
-                <button id="theme-toggle" class="btn btn-secondary" aria-label="Toggle theme">🌙 Dark</button>
-            </div>
-        </header>
+  <nav>
+    <a href="signin.html">Sign In</a>
+    <a href="signup.html">Sign Up</a>
+  </nav>
 
-        <!-- Hero Section -->
-        <section class="hero">
-            <div class="hero-content">
-                <h2>Build the Future of Space Living</h2>
-                <p>Design efficient, sustainable space habitats with our advanced 3D planning tool. From cylindrical stations to multi-floor complexes, create optimal living environments for long-duration missions.</p>
-                <div class="hero-buttons">
-                    <a href="signup.html" class="btn btn-primary">Get Started</a>
-                    <a href="signin.html" class="btn btn-secondary">Sign In</a>
-                </div>
-            </div>
-            <div class="hero-visual">
-                <div class="space-scene">
-                    <div class="stars"></div>
-                    <div class="habitat-preview">
-                        <i class="fas fa-rocket"></i>
-                        <div class="habitat-model">
-                            <div class="cylinder"></div>
-                            <div class="floors">
-                                <div class="floor"></div>
-                                <div class="floor"></div>
-                                <div class="floor"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+  <div class="container" role="main" aria-label="Space Habitat Designer Landing Page">
+    <h1>SOLIS</h1>
+    <p class="tagline">System for Orbital Living and Integrated Support.</p>
+    <p class="description">
+      Welcome to Space Habitat Designer, an innovative web application that allows you to plan and visualize space habitats. Whether you're an architect, engineer, or space enthusiast, our tool provides intuitive modules for designing floors, placing furniture, integrating systems, and creating immersive 3D scenes. Start building the habitats of tomorrow today.
+    </p>
 
-        <!-- Features Section -->
-        <section class="features">
-            <h2>Powerful Design Tools</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <i class="fas fa-cube"></i>
-                    <h3>3D Visualization</h3>
-                    <p>Real-time 3D rendering of your habitat designs with multiple view modes and interactive controls.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-cogs"></i>
-                    <h3>Systems Integration</h3>
-                    <p>Incorporate life support, power, waste management, and other critical systems into your layout.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-users"></i>
-                    <h3>Crew Optimization</h3>
-                    <p>Design for crew comfort with sleeping quarters, exercise areas, and recreational spaces.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-save"></i>
-                    <h3>Save & Share</h3>
-                    <p>Save your designs and load them later. Share layouts with your team for collaboration.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-brain"></i>
-                    <h3>AI Assistance</h3>
-                    <p>Get AI-powered suggestions for materials and layouts based on your habitat requirements.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-chart-line"></i>
-                    <h3>Analytics</h3>
-                    <p>View detailed metrics including volume, surface area, and crew capacity calculations.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- CTA Section -->
-        <section class="cta">
-            <h2>Ready to Design Your Space Habitat?</h2>
-            <p>Join thousands of space engineers and architects using our platform to plan the next generation of space stations.</p>
-            <a href="signup.html" class="btn btn-primary">Start Designing Now</a>
-        </section>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>&copy; 2024 Space Habitat Designer. Explore the future of space living.</p>
-        </footer>
-    </div>
-
-    <script>
-        // Theme toggle functionality
-        document.addEventListener('DOMContentLoaded', () => {
-            // Theme bootstrap
-            const savedTheme = localStorage.getItem('shd-theme');
-            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', initialTheme);
-
-            const toggleBtn = document.getElementById('theme-toggle');
-            const setToggleLabel = (theme) => {
-                if (!toggleBtn) return;
-                if (theme === 'dark') {
-                    toggleBtn.textContent = '🌙 Dark';
-                } else {
-                    toggleBtn.textContent = '☀️ Light';
-                }
-            };
-            setToggleLabel(initialTheme);
-
-            if (toggleBtn) {
-                toggleBtn.addEventListener('click', () => {
-                    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-                    const next = current === 'dark' ? 'light' : 'dark';
-                    document.documentElement.setAttribute('data-theme', next);
-                    localStorage.setItem('shd-theme', next);
-                    setToggleLabel(next);
-                    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: next } }));
-                });
-            }
-
-            // Add some interactive effects
-            const featureCards = document.querySelectorAll('.feature-card');
-            featureCards.forEach(card => {
-                card.addEventListener('mouseenter', () => {
-                    card.style.transform = 'translateY(-5px)';
-                    card.style.transition = 'transform 0.3s ease';
-                });
-                
-                card.addEventListener('mouseleave', () => {
-                    card.style.transform = 'translateY(0)';
-                });
-            });
-        });
-    </script>
+    <section class="features">
+      <div class="feature">
+        <h3>Habitat Planning</h3>
+        <p>Plan the overall structure and layout of your space habitat with our comprehensive planning tools.</p>
+      </div>
+      <div class="feature">
+        <h3>Floor Design</h3>
+        <p>Design multi-level floors with precision, ensuring optimal space utilization and functionality.</p>
+      </div>
+      <div class="feature">
+        <h3>Furniture Placement</h3>
+        <p>Place and arrange furniture items to create comfortable and efficient living spaces in zero gravity.</p>
+      </div>
+      <div class="feature">
+        <h3>Systems Integration</h3>
+        <p>Incorporate essential systems like life support, power, and communication into your habitat design.</p>
+      </div>
+      <div class="feature">
+        <h3>3D Scene Visualization</h3>
+        <p>Visualize your designs in immersive 3D scenes to better understand and refine your space habitats.</p>
+      </div>
+      <div class="feature">
+        <h3>Collaborative Design</h3>
+        <p>Work with team members to collaboratively design and iterate on complex space habitat projects.</p>
+      </div>
+    </section>
+  </div>
 </body>
 </html>

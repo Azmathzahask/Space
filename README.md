@@ -58,16 +58,6 @@ A visual tool for designing and exploring space habitat layouts for crew mission
 3. **Manual Adjustment**: Use mouse to rotate and zoom around the habitat
 4. **View Controls**: Use the view buttons for different perspectives
 
-#### Save & Load
-1. **Save Layout**: Click "Save Layout" or press Ctrl+S to export your design
-2. **Load Layout**: Click "Load Layout" or press Ctrl+L to import a saved design
-
-### Keyboard Shortcuts
-- `Ctrl+A`: Auto Layout
-- `Ctrl+C`: Clear Layout
-- `Ctrl+S`: Save Layout
-- `Ctrl+L`: Load Layout
-
 ## Technical Details
 
 ### Technologies Used
@@ -124,7 +114,7 @@ A visual tool for designing and exploring space habitat layouts for crew mission
 - **Advanced Lighting**: Realistic space lighting conditions
 - **Particle Effects**: Visual representation of air flow and systems
 - **Animation**: System operation animations
-- **VR Support**: Virtual reality interface for immersive design
+
 
 ## Contributing
 
@@ -135,9 +125,6 @@ This project is open for contributions! Areas for improvement include:
 - Performance optimizations
 - Mobile interface improvements
 
-## License
-
-This project is open source and available under the MIT License.
 
 ## Acknowledgments
 
